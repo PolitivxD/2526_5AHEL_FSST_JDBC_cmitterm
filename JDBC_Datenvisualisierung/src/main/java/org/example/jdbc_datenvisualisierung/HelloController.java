@@ -137,7 +137,7 @@ public class HelloController {
             SELECT region, AVG(lifeexpectancy) AS avg_le
             FROM country
             WHERE continent = ?
-              AND lifeexpectancy IS NOT NULL
+            AND lifeexpectancy IS NOT NULL
             GROUP BY region
             ORDER BY avg_le %s, region ASC
             """.formatted(order);
