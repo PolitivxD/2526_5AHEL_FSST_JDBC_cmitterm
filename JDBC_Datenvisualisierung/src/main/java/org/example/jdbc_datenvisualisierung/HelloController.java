@@ -14,6 +14,8 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+// TODO: eigene Klasse für DB-Zugriffe als Singleton
+
 public class HelloController {
 
     @FXML private ComboBox<String> cbContinent;
