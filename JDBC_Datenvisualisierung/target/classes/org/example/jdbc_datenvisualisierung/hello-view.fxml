@@ -28,31 +28,18 @@
     </VBox>
   </top>
 
-  <left>
-    <ScrollPane fitToWidth="true" prefWidth="250">
-      <content>
-        <VBox fx:id="vbContinentRadios" spacing="6">
-          <padding>
-            <Insets top="10" right="10" bottom="10" left="10"/>
-          </padding>
-        </VBox>
-      </content>
-    </ScrollPane>
-  </left>
-
   <center>
-    <BarChart fx:id="barChart" legendVisible="false" prefHeight="750">
+    <BarChart fx:id="barChart" legendVisible="false" animated="false" prefHeight="750">
       <padding>
         <Insets top="10" right="10" bottom="60" left="10"/>
       </padding>
       <xAxis>
-        <CategoryAxis label="Region"/>
+        <CategoryAxis fx:id="xAxis" label="Region"/>
       </xAxis>
       <yAxis>
         <NumberAxis label="Durchschnittliche Lebenserwartung"/>
       </yAxis>
     </BarChart>
   </center>
-
 
 </BorderPane>

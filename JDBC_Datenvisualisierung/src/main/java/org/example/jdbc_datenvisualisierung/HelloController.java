@@ -1,15 +1,14 @@
 package org.example.jdbc_datenvisualisierung;
 
-import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.layout.VBox;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -17,51 +16,39 @@ import java.util.List;
 
 public class HelloController {
 
-    // --- FXML Controls ---
     @FXML private ComboBox<String> cbContinent;
-    @FXML private VBox vbContinentRadios;
     @FXML private RadioButton rbAsc;
     @FXML private RadioButton rbDesc;
     @FXML private BarChart<String, Number> barChart;
+    @FXML private CategoryAxis xAxis;
 
-    private final ToggleGroup tgContinents = new ToggleGroup();
     private final ToggleGroup tgSort = new ToggleGroup();
 
-    // --- DB Daten (ANPASSEN) ---
+    // Damit alte DB-Tasks (z.B. Afrika) nicht nachträglich neue Auswahl überschreiben:
+    private int requestId = 0;
+
+    // DB
     private static final String DB_URL  = "jdbc:postgresql://xserv:5432/world2";
     private static final String DB_USER = "reader";
     private static final String DB_PASS = "reader";
 
     @FXML
     public void initialize() {
-        // Sort ToggleGroup
         rbAsc.setToggleGroup(tgSort);
         rbDesc.setToggleGroup(tgSort);
         rbAsc.setSelected(true);
 
-        // Listener: ComboBox -> Chart neu laden
-        cbContinent.valueProperty().addListener((obs, oldV, newV) -> {
-            if (newV != null) {
-                selectContinentRadio(newV);
-                reloadChartAsync();
-            }
+        cbContinent.valueProperty().addListener((obs, o, n) -> {
+            if (n != null) reloadChartAsync();
         });
 
-        // Listener: Sortierung -> Chart neu laden
-        tgSort.selectedToggleProperty().addListener((obs, oldT, newT) -> reloadChartAsync());
-
-        // Listener: Kontinent RadioButtons -> ComboBox setzen
-        tgContinents.selectedToggleProperty().addListener((obs, oldT, newT) -> {
-            if (newT instanceof RadioButton rb) {
-                String cont = rb.getText();
-                if (!cont.equals(cbContinent.getValue())) cbContinent.setValue(cont);
-            }
-        });
+        tgSort.selectedToggleProperty().addListener((obs, o, n) -> reloadChartAsync());
 
         loadContinentsAsync();
     }
 
-    // ------------------ DB LOAD: Continents ------------------
+    // ------------------ Continents ------------------
+
     private void loadContinentsAsync() {
         Task<List<String>> task = new Task<>() {
             @Override protected List<String> call() throws Exception {
@@ -70,13 +57,9 @@ public class HelloController {
         };
 
         task.setOnSucceeded(e -> {
-            List<String> continents = task.getValue();
+            var continents = task.getValue();
             cbContinent.setItems(FXCollections.observableArrayList(continents));
-            buildContinentRadios(continents);
-
-            if (!continents.isEmpty()) {
-                cbContinent.setValue(continents.get(0));
-            }
+            if (!continents.isEmpty()) cbContinent.setValue(continents.get(0));
         });
 
         task.setOnFailed(e -> task.getException().printStackTrace());
@@ -97,29 +80,15 @@ public class HelloController {
         return list;
     }
 
-    private void buildContinentRadios(List<String> continents) {
-        vbContinentRadios.getChildren().clear();
-        for (String c : continents) {
-            RadioButton rb = new RadioButton(c);
-            rb.setToggleGroup(tgContinents);
-            vbContinentRadios.getChildren().add(rb);
-        }
-    }
+    // ------------------ Chart ------------------
 
-    private void selectContinentRadio(String continent) {
-        vbContinentRadios.getChildren().forEach(node -> {
-            if (node instanceof RadioButton rb && rb.getText().equals(continent)) {
-                rb.setSelected(true);
-            }
-        });
-    }
-
-    // ------------------ DB LOAD: Chart Data ------------------
     private void reloadChartAsync() {
         String continent = cbContinent.getValue();
         if (continent == null) return;
 
         boolean asc = tgSort.getSelectedToggle() == rbAsc;
+
+        final int myRequest = ++requestId;
 
         Task<List<RegionAvg>> task = new Task<>() {
             @Override protected List<RegionAvg> call() throws Exception {
@@ -128,11 +97,32 @@ public class HelloController {
         };
 
         task.setOnSucceeded(e -> {
+            // Wenn inzwischen schon eine neuere Auswahl gemacht wurde -> altes Ergebnis ignorieren
+            if (myRequest != requestId) return;
+
+            var rows = task.getValue();
+
+            // Alles neu setzen
+            barChart.getData().clear();
+
+            var categories = FXCollections.<String>observableArrayList();
             XYChart.Series<String, Number> series = new XYChart.Series<>();
-            for (RegionAvg r : task.getValue()) {
+
+            for (var r : rows) {
+                categories.add(r.region);
                 series.getData().add(new XYChart.Data<>(r.region, r.avgLifeExpectancy));
             }
-            barChart.getData().setAll(series);
+
+            // Achse resetten + neue Kategorien setzen
+            xAxis.setAutoRanging(true);
+            xAxis.setCategories(categories);
+            xAxis.setAutoRanging(false);
+
+            barChart.getData().add(series);
+
+            // erzwingt visuelles Update
+            barChart.applyCss();
+            barChart.layout();
         });
 
         task.setOnFailed(e -> task.getException().printStackTrace());
@@ -161,9 +151,10 @@ public class HelloController {
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String region = rs.getString("region");
-                    double avg = rs.getDouble("avg_le");
-                    list.add(new RegionAvg(region, avg));
+                    list.add(new RegionAvg(
+                            rs.getString("region"),
+                            rs.getDouble("avg_le")
+                    ));
                 }
             }
         }
